@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsflow"
+version = "0.1.0"
+description = "A generic handoff, trace, eval, and research-intake CLI for long-running projects."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Codex" }]
+dependencies = []
+
+[project.scripts]
+opsflow = "opsflow.cli:main"
+
+[tool.setuptools]
+packages = ["opsflow"]
