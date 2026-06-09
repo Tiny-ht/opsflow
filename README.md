@@ -16,6 +16,8 @@ so the same workflow can fit many different repositories and teams.
 - `eval`: real feedback from tests, users, benchmarks, platforms, or reviews
 - `research`: papers, reports, repositories, docs, and reference intake
 - `handoff`: current-state and handoff documents for fast context transfer
+- `agent docs`: `AGENTS.md` and `CLAUDE.md` instructions so AI agents know when
+  and how to record work autonomously
 
 ## Install
 
@@ -82,6 +84,8 @@ By default, `opsflow init` creates:
 
 ```text
 .opsflow/config.json
+AGENTS.md
+CLAUDE.md
 ops/
   README.md
   current_state.md
@@ -105,6 +109,11 @@ ops/
 
 The JSONL ledgers are append-only by convention. `init` creates missing files,
 but does not truncate existing logs.
+
+`AGENTS.md` and `CLAUDE.md` are created in the project root. They tell AI agents
+to read the Opsflow config, inspect current state and handoff docs, append trace
+and eval records, and avoid rewriting history. Existing agent docs are left in
+place unless `--force-docs` is passed.
 
 ## Initialize An Existing Ops Directory
 

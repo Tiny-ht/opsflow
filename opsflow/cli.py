@@ -50,6 +50,16 @@ class OpsContext:
     def doc_paths(self) -> dict[str, Path]:
         return {key: self.rel_path(value) for key, value in self.config["docs"].items()}
 
+    def root_path(self, value: str) -> Path:
+        raw = Path(value)
+        return raw if raw.is_absolute() else self.root / raw
+
+    def agent_doc_paths(self) -> dict[str, Path]:
+        return {
+            key: self.root_path(value)
+            for key, value in self.config.get("agent_docs", default_agent_docs()).items()
+        }
+
 
 def now_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
@@ -169,9 +179,17 @@ def default_config(
             "research_readme": "research/README.md",
             "reference_note_template": "research/reference_note_template.md",
         },
+        "agent_docs": default_agent_docs(),
         "defaults": {
             "owner": owner,
         },
+    }
+
+
+def default_agent_docs() -> dict[str, str]:
+    return {
+        "agents": "AGENTS.md",
+        "claude": "CLAUDE.md",
     }
 
 
@@ -268,6 +286,13 @@ def touch_jsonl(path: Path) -> bool:
         return False
     path.touch()
     return True
+
+
+def display_path(path: Path, *, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
 
 def template_readme(project_name: str, *, trace_log: str, eval_log: str, research_log: str) -> str:
@@ -573,6 +598,77 @@ Add recurring failure modes here after they appear in trace or eval records.
 """
 
 
+def template_agent_instructions(
+    project_name: str,
+    *,
+    current_state: str,
+    handoff: str,
+    variant: str = "agents",
+) -> str:
+    title = "Claude Instructions" if variant == "claude" else "AI Agent Instructions"
+    return f"""# {title}
+
+This project uses Opsflow for autonomous project memory. Treat the ops ledgers
+and handoff docs as the source of truth for long-running work.
+
+## Startup Checklist
+
+1. Find the Opsflow config:
+   ```bash
+   opsflow paths
+   ```
+2. Read these before making directional changes:
+   - `{current_state}`
+   - `{handoff}`
+   - latest `trace`, `eval`, and `research` records
+3. If `opsflow` is not installed, use:
+   ```bash
+   python3 -m opsflow.cli paths
+   ```
+   If neither command is available, read `.opsflow/config.json` and append JSON
+   objects directly to the configured JSONL ledgers.
+
+## Record-Keeping Rules
+
+- Append a `trace` before or after meaningful work: hypotheses, code changes,
+  data changes, external process runs, result reads, decisions, blockers, and
+  failures.
+- Append an `eval` whenever real feedback arrives from tests, users, benchmarks,
+  platform runs, reviews, or other external checks.
+- Append a `research` record before a paper, report, repository, doc, or note
+  influences the plan.
+- Update `{current_state}` and `{handoff}` before ending a substantial session or
+  handing work to another operator.
+
+## Useful Commands
+
+```bash
+opsflow latest --source all --limit 10
+opsflow query --keyword blocked --source all
+opsflow add-trace --stage build --kind code_change --status succeeded --title "Short title" --summary "What changed and why."
+opsflow add-eval --run-id run_001 --status succeeded --summary "What the result showed."
+opsflow add-ref --source-type paper --title "Reference title" --status queued
+opsflow handoff draft
+```
+
+Use `--field KEY=VALUE` on add commands for project-specific metadata such as
+commit IDs, issue IDs, platform task IDs, model names, artifact paths, or links.
+
+## Discipline
+
+- Do not rewrite or truncate JSONL ledgers; append new records.
+- Do not log secrets, credentials, cookies, private keys, or raw personal data.
+- Link records together with `parent`, `parent_run`, tags, and artifact paths
+  whenever possible.
+- If a result invalidates earlier assumptions, record the change instead of
+  erasing history.
+
+## Project
+
+- name: {project_name}
+"""
+
+
 def init_templates(ctx: OpsContext, *, overwrite_docs: bool = False) -> list[str]:
     project_name = str(ctx.config["project_name"])
     logs = ctx.config["logs"]
@@ -598,6 +694,26 @@ def init_templates(ctx: OpsContext, *, overwrite_docs: bool = False) -> list[str
 
     touched: list[str] = []
     for path, text in templates.items():
+        if write_text(path, text, overwrite=overwrite_docs):
+            touched.append(str(path))
+
+    current_state = display_path(docs["current_state"], root=ctx.root)
+    handoff = display_path(docs["handoff"], root=ctx.root)
+    agent_templates = {
+        ctx.agent_doc_paths()["agents"]: template_agent_instructions(
+            project_name,
+            current_state=current_state,
+            handoff=handoff,
+            variant="agents",
+        ),
+        ctx.agent_doc_paths()["claude"]: template_agent_instructions(
+            project_name,
+            current_state=current_state,
+            handoff=handoff,
+            variant="claude",
+        ),
+    }
+    for path, text in agent_templates.items():
         if write_text(path, text, overwrite=overwrite_docs):
             touched.append(str(path))
 
@@ -649,6 +765,7 @@ def handle_paths(args: argparse.Namespace) -> None:
         "ops_dir": str(ctx.ops_dir),
         "logs": {key: str(value) for key, value in ctx.log_paths().items()},
         "docs": {key: str(value) for key, value in ctx.doc_paths().items()},
+        "agent_docs": {key: str(value) for key, value in ctx.agent_doc_paths().items()},
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
 
