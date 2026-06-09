@@ -7,8 +7,8 @@ resumable. It gives you append-only ledgers for trace, eval, and research
 records, plus handoff and current-state templates that make it easier for the
 next operator to continue from the real state of the project.
 
-It was extracted from the TAAC ops workflow, but the project name, owner, ops
-directory, and ledger filenames are configurable.
+The project name, owner, ops directory, and ledger filenames are configurable,
+so the same workflow can fit many different repositories and teams.
 
 ## What It Manages
 
@@ -106,16 +106,16 @@ ops/
 The JSONL ledgers are append-only by convention. `init` creates missing files,
 but does not truncate existing logs.
 
-## Initialize An Existing TAAC-Style Directory
+## Initialize An Existing Ops Directory
 
-For a repository that already has a TAAC-like ops folder and an
-`online_eval_log.jsonl` name:
+For a repository that already has an ops folder or custom ledger names, point
+Opsflow at those paths:
 
 ```bash
-opsflow --root /Users/xiaoxiaoxiaohoutian/Desktop/taac init \
-  --name TAAC2026 \
-  --ops-dir taac2026_ops \
-  --eval-log evals/online_eval_log.jsonl
+opsflow --root /path/to/project init \
+  --name "My Existing Project" \
+  --ops-dir project_ops \
+  --eval-log evals/platform_eval_log.jsonl
 ```
 
 Global options such as `--root`, `--ops-dir`, and `--config` are passed before

@@ -4,7 +4,7 @@
 
 Opsflow 是一个小型、零依赖的项目运维 CLI，用来让长期项目可以被可靠接手和恢复。它提供追加式的 `trace`、`eval`、`research` 账本，以及 handoff / current-state 文档模板，让下一个接手的人能从真实状态继续工作，而不是从聊天记录里猜。
 
-这个工具抽象自 TAAC 项目里的 ops 工作流，但项目名、owner、ops 目录、账本文件名都可以配置。
+项目名、owner、ops 目录、账本文件名都可以配置，因此同一套工作流可以适配不同仓库和团队。
 
 ## 它管理什么
 
@@ -101,15 +101,15 @@ ops/
 
 JSONL 账本按约定是 append-only。`init` 会创建缺失文件，但不会清空已有日志。
 
-## 初始化已有的 TAAC 风格目录
+## 初始化已有的 ops 目录
 
-如果某个仓库已经有类似 TAAC 的 ops 目录，并且 eval 账本叫 `online_eval_log.jsonl`：
+如果某个仓库已经有 ops 目录，或者想使用自定义账本文件名，可以直接指向这些路径：
 
 ```bash
-opsflow --root /Users/xiaoxiaoxiaohoutian/Desktop/taac init \
-  --name TAAC2026 \
-  --ops-dir taac2026_ops \
-  --eval-log evals/online_eval_log.jsonl
+opsflow --root /path/to/project init \
+  --name "My Existing Project" \
+  --ops-dir project_ops \
+  --eval-log evals/platform_eval_log.jsonl
 ```
 
 `--root`、`--ops-dir`、`--config` 这类全局参数需要放在子命令前面。
