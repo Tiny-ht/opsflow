@@ -1,25 +1,21 @@
 # Opsflow
 
-[简体中文](README.zh-CN.md)
+[English](README.md)
 
-Opsflow is a small, dependency-free CLI for keeping long-running project work
-resumable. It gives you append-only ledgers for trace, eval, and research
-records, plus handoff and current-state templates that make it easier for the
-next operator to continue from the real state of the project.
+Opsflow 是一个小型、零依赖的项目运维 CLI，用来让长期项目可以被可靠接手和恢复。它提供追加式的 `trace`、`eval`、`research` 账本，以及 handoff / current-state 文档模板，让下一个接手的人能从真实状态继续工作，而不是从聊天记录里猜。
 
-It was extracted from the TAAC ops workflow, but the project name, owner, ops
-directory, and ledger filenames are configurable.
+这个工具抽象自 TAAC 项目里的 ops 工作流，但项目名、owner、ops 目录、账本文件名都可以配置。
 
-## What It Manages
+## 它管理什么
 
-- `trace`: decisions, code changes, failures, blockers, and direction changes
-- `eval`: real feedback from tests, users, benchmarks, platforms, or reviews
-- `research`: papers, reports, repositories, docs, and reference intake
-- `handoff`: current-state and handoff documents for fast context transfer
+- `trace`：决策、代码改动、失败、blocker、方向变化
+- `eval`：测试、用户反馈、benchmark、平台评测、review 等真实反馈
+- `research`：论文、技术报告、开源仓库、文档、参考资料摄取
+- `handoff`：当前状态和交接文档，帮助快速转移上下文
 
-## Install
+## 安装
 
-For local development:
+本地开发安装：
 
 ```bash
 git clone https://github.com/Tiny-ht/opsflow.git
@@ -27,21 +23,21 @@ cd opsflow
 python3 -m pip install -e .
 ```
 
-You can also run it directly without installing:
+也可以不安装，直接运行：
 
 ```bash
 python3 -m opsflow.cli --help
 ```
 
-## Quick Start
+## 快速开始
 
-Initialize an ops workspace:
+初始化一个 ops 工作区：
 
 ```bash
 opsflow init --name "My Project"
 ```
 
-Add a trace record:
+追加一条 trace 记录：
 
 ```bash
 opsflow add-trace \
@@ -53,7 +49,7 @@ opsflow add-trace \
   --tags parser,smoke
 ```
 
-Add an eval record:
+追加一条 eval 记录：
 
 ```bash
 opsflow add-eval \
@@ -63,22 +59,22 @@ opsflow add-eval \
   --summary "Smoke eval passed."
 ```
 
-Query recent records:
+查询最近记录：
 
 ```bash
 opsflow latest --source all --limit 5
 opsflow query --keyword timeout --source all
 ```
 
-Draft a handoff:
+生成一份 handoff 草稿：
 
 ```bash
 opsflow handoff draft --phase build --focus "Parser smoke tests"
 ```
 
-## Generated Structure
+## 生成的目录结构
 
-By default, `opsflow init` creates:
+默认情况下，`opsflow init` 会创建：
 
 ```text
 .opsflow/config.json
@@ -103,13 +99,11 @@ ops/
     reference_note_template.md
 ```
 
-The JSONL ledgers are append-only by convention. `init` creates missing files,
-but does not truncate existing logs.
+JSONL 账本按约定是 append-only。`init` 会创建缺失文件，但不会清空已有日志。
 
-## Initialize An Existing TAAC-Style Directory
+## 初始化已有的 TAAC 风格目录
 
-For a repository that already has a TAAC-like ops folder and an
-`online_eval_log.jsonl` name:
+如果某个仓库已经有类似 TAAC 的 ops 目录，并且 eval 账本叫 `online_eval_log.jsonl`：
 
 ```bash
 opsflow --root /Users/xiaoxiaoxiaohoutian/Desktop/taac init \
@@ -118,10 +112,9 @@ opsflow --root /Users/xiaoxiaoxiaohoutian/Desktop/taac init \
   --eval-log evals/online_eval_log.jsonl
 ```
 
-Global options such as `--root`, `--ops-dir`, and `--config` are passed before
-the subcommand.
+`--root`、`--ops-dir`、`--config` 这类全局参数需要放在子命令前面。
 
-## Commands
+## 常用命令
 
 ```bash
 opsflow paths
@@ -133,7 +126,7 @@ opsflow latest --source trace --limit 10
 opsflow handoff show
 ```
 
-All add commands support repeatable extra fields:
+所有 add 命令都支持重复传入额外字段：
 
 ```bash
 opsflow add-trace \
@@ -146,13 +139,13 @@ opsflow add-trace \
   --field rollout_percent=10
 ```
 
-## Design Principles
+## 设计原则
 
-- Keep the tool dependency-free and easy to inspect.
-- Prefer structured JSONL records over fragile chat-history memory.
-- Keep current state in one place, and history in append-only ledgers.
-- Make handoff docs useful even when the next operator has no prior context.
+- 保持零依赖，容易审计。
+- 用结构化 JSONL 记录替代脆弱的聊天历史记忆。
+- 当前态只放一个地方，历史记录放追加式账本。
+- 让 handoff 文档即使脱离原始聊天上下文也能直接接手。
 
-## License
+## 许可证
 
 MIT
