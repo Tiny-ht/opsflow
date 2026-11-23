@@ -2,26 +2,38 @@
 
 [简体中文](README.zh-CN.md)
 
-Opsflow is a small, dependency-free CLI for keeping long-running project work
-resumable. It gives you append-only ledgers for trace, eval, and research
-records, plus handoff and current-state templates that make it easier for the
-next operator to continue from the real state of the project.
+Opsflow (`v0.2`) is a small, zero-dependency Python CLI for keeping long-running
+engineering and research projects resumable **without flooding agent context
+windows**.
 
-The project name, owner, ops directory, and ledger filenames are configurable,
-so the same workflow can fit many different repositories and teams.
+Instead of appending to ever-growing global handoff files, Opsflow separates:
+- **Bounded current state**: `project.json`, generated `BRIEF.md` (<= 12 KiB),
+  and one overwrite-in-place `tracks/<track_id>/track.json` card per parallel
+  workstream (with `revision` optimistic locking).
+- **Safe append-only ledgers**: sidecar file locking, atomic replacement,
+  `allow_nan=False`, idempotent retries, corruption refusal, optional multi-layer
+  evaluation routing, and automatic externalization for results > 16 KiB.
+- **Rebuildable local search**: `.index/ops.sqlite` incremental indexing with
+  budgeted `query` summary cards and progressive JSON Pointer `show` expansion.
 
 ## What It Manages
 
-- `trace`: decisions, code changes, failures, blockers, and direction changes
-- `eval`: real feedback from tests, users, benchmarks, platforms, or reviews
-- `research`: papers, reports, repositories, docs, and reference intake
-- `handoff`: current-state and handoff documents for fast context transfer
-- `agent docs`: `AGENTS.md` and `CLAUDE.md` instructions so AI agents know when
-  and how to record work autonomously
+- `project.json` & `BRIEF.md`: official baseline, active constraints, and
+  bounded open-track overview (`opsflow brief --write`, default 12 KiB).
+- `tracks/<track_id>/track.json`: one state card per parallel workstream
+  (`opsflow track set/close/list`, `opsflow context --track <id>`, default 24 KiB).
+- `trace`: decisions, code/config/data changes, incidents, blockers, and rollbacks.
+- `eval`: lightweight `add-eval` and strict structured `add-result --file`
+  (single `evals/eval_log.jsonl` by default, or configurable per-layer ledgers
+  via `eval_layers` in `.opsflow/config.json`).
+- `research`: papers, technical reports, repositories, docs, and internal notes.
+- `lessons/`: concise reusable rules (<= 64 KiB total), replacing append-only
+  failure logs.
+- `agent docs`: single-source `AGENTS.md` (<= 8 KiB) + thin delegating `CLAUDE.md`.
 
 ## Install
 
-For local development:
+Requires Python 3.10+ (standard library only, zero runtime dependencies):
 
 ```bash
 git clone https://github.com/Tiny-ht/opsflow.git
@@ -29,7 +41,7 @@ cd opsflow
 python3 -m pip install -e .
 ```
 
-You can also run it directly without installing:
+Or run directly without installing:
 
 ```bash
 python3 -m opsflow.cli --help
@@ -37,130 +49,136 @@ python3 -m opsflow.cli --help
 
 ## Quick Start
 
-Initialize an ops workspace:
+Initialize a workspace (passes `opsflow check` out of the box):
 
 ```bash
 opsflow init --name "My Project"
+opsflow brief
 ```
 
-Add a trace record:
+Create and update a parallel work track (copy `ops/templates/track.json` as a starter):
 
 ```bash
-opsflow add-trace \
-  --stage build \
-  --kind code_change \
-  --status succeeded \
-  --title "Add parser" \
-  --summary "Parser now handles empty input." \
-  --tags parser,smoke
+opsflow track set --file track.json
+opsflow context --track parser
+opsflow track set --file track_update.json --expected-revision 1
 ```
 
-Add an eval record:
+Record traces, lightweight evals, or strict structured results:
 
 ```bash
-opsflow add-eval \
-  --run-id run_001 \
-  --status succeeded \
-  --score 0.91 \
-  --summary "Smoke eval passed."
+opsflow add-trace --track parser --stage build --kind decision --status completed \
+  --title "Switch to stdlib" --summary "Removed external parser dependency." --tags parser
+opsflow add-eval --track parser --layer offline --run-id run_001 --status completed \
+  --score 0.94 --summary "Offline benchmark passed."
+opsflow add-result --file result.json
+opsflow add-ref --track parser --source-type paper --title "Bounded Contexts" --status extracted
 ```
 
-Query recent records:
+Search summaries within budget and drill down progressively:
 
 ```bash
-opsflow latest --source all --limit 5
-opsflow query --keyword timeout --source all
+opsflow query --keyword benchmark --layer offline --since 2026-11-01 --offset 0
+opsflow latest --source all --limit 10
+opsflow show <key> --field /metrics --offset 0 --limit 10
+opsflow show <key> --detail --field /extra/rows --offset 0 --limit 20
 ```
 
-Draft a handoff:
+Close finished or rejected tracks so they exit `BRIEF.md`, then verify:
 
 ```bash
-opsflow handoff draft --phase build --focus "Parser smoke tests"
+opsflow track close parser --conclusion "Merged v2 parser; 2x faster." --expected-revision 2
+opsflow brief --write
+opsflow check
+```
+
+## Multi-Layer Evaluation Ledgers (Optional)
+
+By default, all evals are written to `evals/eval_log.jsonl` with an optional
+`evidence_layer` field. Projects that need hard separation between evidence
+tiers (such as `dev` / `staging` / `prod` or `train` / `backtest` / `live`) can
+configure separate ledgers at init time or in `.opsflow/config.json`:
+
+```bash
+opsflow init --name "ML System" \
+  --eval-layer offline=evals/offline_eval_log.jsonl \
+  --eval-layer staging=evals/staging_eval_log.jsonl \
+  --eval-layer prod=evals/prod_eval_log.jsonl
+```
+
+When `eval_layers` is configured, `add-eval` and `add-result` require a valid
+configured layer and route records into that layer's ledger. `query --source eval`
+searches across all eval layers (including any legacy `eval_log.jsonl`), while
+`query --source prod` or `query --layer prod` isolates one tier.
+
+## Structured `add-result` Schema
+
+`opsflow add-result --file result.json` enforces explicit units and aggregation
+on every metric (no bare numbers) and automatically externalizes records larger
+than 16 KiB to `tracks/<track_id>/results/<eval_id>.json` (or `evals/results/`)
+with a SHA-256 `detail_ref`:
+
+```json
+{
+  "track_id": "parser",
+  "eval_id": "eval_parser_v2",
+  "evidence_layer": "offline",
+  "status": "completed",
+  "execution_mode": "benchmark",
+  "summary": "Benchmark on 10k fixtures.",
+  "metrics": {
+    "p99_latency": {"value": 12.4, "unit": "ms", "aggregation": "p99_10k_runs"}
+  },
+  "artifacts": ["reports/parser_v2.md"],
+  "supersedes": ["eval_parser_v1"],
+  "tags": ["parser", "benchmark"]
+}
 ```
 
 ## Generated Structure
-
-By default, `opsflow init` creates:
 
 ```text
 .opsflow/config.json
 AGENTS.md
 CLAUDE.md
 ops/
+  .gitignore
   README.md
-  current_state.md
-  roadmap.md
-  handoff/
-    CURRENT_HANDOFF.md
-    HANDOFF_TEMPLATE.md
-  trace/
+  project.json
+  BRIEF.md
+  tracks/
+  lessons/
     README.md
-    failure_patterns.md
+  templates/
+    track.json
+    monitor_prompt.md
+  trace/
     trace_log.jsonl
   evals/
-    README.md
     eval_log.jsonl
-    user_signal_template.md
   research/
-    README.md
     reference_intake.jsonl
-    reference_note_template.md
 ```
 
-The JSONL ledgers are append-only by convention. `init` creates missing files,
-but does not truncate existing logs.
+Global options (`--root`, `--ops-dir`, `--config`) precede the subcommand.
+Existing ledgers are never truncated; existing `AGENTS.md`, `CLAUDE.md`, and
+`project.json` are preserved unless `--force-docs` is passed.
 
-`AGENTS.md` and `CLAUDE.md` are created in the project root. They tell AI agents
-to read the Opsflow config, inspect current state and handoff docs, append trace
-and eval records, and avoid rewriting history. Existing agent docs are left in
-place unless `--force-docs` is passed.
+## Upgrading From v0.1
 
-## Initialize An Existing Ops Directory
-
-For a repository that already has an ops folder or custom ledger names, point
-Opsflow at those paths:
-
-```bash
-opsflow --root /path/to/project init \
-  --name "My Existing Project" \
-  --ops-dir project_ops \
-  --eval-log evals/platform_eval_log.jsonl
-```
-
-Global options such as `--root`, `--ops-dir`, and `--config` are passed before
-the subcommand.
-
-## Commands
-
-```bash
-opsflow paths
-opsflow add-trace --stage plan --kind hypothesis --status planned --title "..." --summary "..."
-opsflow add-eval --run-id run_002 --status failed --summary "Timed out" --resource timeout
-opsflow add-ref --source-type paper --title "..." --status queued --scenario-match medium
-opsflow query --keyword timeout --source all
-opsflow latest --source trace --limit 10
-opsflow handoff show
-```
-
-All add commands support repeatable extra fields:
-
-```bash
-opsflow add-trace \
-  --stage deploy \
-  --kind decision \
-  --status succeeded \
-  --title "Ship candidate" \
-  --summary "Candidate passed smoke checks." \
-  --field commit=abc123 \
-  --field rollout_percent=10
-```
+- Legacy v0.1 `.opsflow/config.json` and heterogeneous JSONL ledgers remain
+  directly readable and indexable by `query`, `latest`, `show`, and `reindex`.
+- Global handoff files (`current_state.md`, `handoff/CURRENT_HANDOFF.md`,
+  `trace/failure_patterns.md`) and the `handoff` subcommand are retired in v0.2.
+  `opsflow check` flags any retired global files still present in `ops/`.
 
 ## Design Principles
 
-- Keep the tool dependency-free and easy to inspect.
-- Prefer structured JSONL records over fragile chat-history memory.
-- Keep current state in one place, and history in append-only ledgers.
-- Make handoff docs useful even when the next operator has no prior context.
+- Zero third-party dependencies; easy to audit and embed anywhere.
+- Bounded reads by default (`brief` 12 KiB, `context` 24 KiB, `query` 8 KiB, `show` 16 KiB) with explicit omission/pagination instead of silent truncation.
+- Concurrent-safe writes: sidecar `.lock`, atomic replace, `allow_nan=False`, optimistic `revision` checks on tracks, and idempotent ledger retries.
+- Rebuildable local index (`.index/ops.sqlite`) never replaces ledgers or track cards as source of truth.
+- Separate record time, file observation time, and real process liveness verification.
 
 ## License
 

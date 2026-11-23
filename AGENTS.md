@@ -1,30 +1,37 @@
 # AI Agent Instructions
 
-This repository contains Opsflow, a generic CLI for autonomous project memory.
-When changing this repository, keep the tool generic and avoid references to
-any specific downstream project.
+This repository contains **Opsflow**, a generic, dependency-free CLI for bounded
+project memory. Keep the tool generic and avoid references to any downstream
+project.
 
 ## Working Rules
 
-- Prefer small, inspectable changes; the package is intentionally dependency-free.
-- Run `python3 -m py_compile opsflow/cli.py opsflow/__init__.py` after code edits.
+- Keep changes small, inspectable, and strictly Python standard library only.
+- Run the test suite after edits:
+  ```bash
+  python3 -m unittest discover -s tests -v
+  ```
+- Keep this file under 8 KiB; `CLAUDE.md` delegates here instead of duplicating rules.
 - Update both `README.md` and `README.zh-CN.md` when public behavior changes.
-- If you change generated templates, smoke-test `opsflow init` in a temporary directory.
-- Do not stage unrelated local files from this workspace.
+- Smoke-test `opsflow init` and `opsflow check` in a temporary directory when changing templates.
+- Do not stage unrelated local files.
 
-## Opsflow Behavior To Preserve
+## Opsflow Invariants To Preserve
 
-- JSONL ledgers are append-only by convention.
-- `init` creates missing files but must not truncate existing ledgers.
-- Existing `AGENTS.md` and `CLAUDE.md` files in target projects must not be
-  overwritten unless the caller passes `--force-docs`.
-- Global options such as `--root`, `--ops-dir`, and `--config` are passed before
-  the subcommand.
+- Ledgers are append-only with sidecar locking, atomic replacement, `allow_nan=False`,
+  idempotent retries, and corruption refusal.
+- `init` creates missing files and never truncates existing ledgers.
+- Existing `AGENTS.md`, `CLAUDE.md`, and `project.json` in target projects are not
+  overwritten unless `--force-docs` is passed.
+- Global options (`--root`, `--ops-dir`, `--config`) precede the subcommand.
+- Output views (`brief`, `context`, `query`, `show`) enforce UTF-8 byte budgets without
+  silently truncating conclusions.
+- `.index/ops.sqlite` is rebuildable local cache; ledgers and track cards remain source of truth.
 
 ## Useful Checks
 
 ```bash
-python3 -m py_compile opsflow/cli.py opsflow/__init__.py
+python3 -m unittest discover -s tests -v
 python3 -m opsflow.cli --help
-python3 -m opsflow.cli --root "$(mktemp -d)" init --name Smoke
+tmp="$(mktemp -d)" && python3 -m opsflow.cli --root "$tmp" init --name Smoke && python3 -m opsflow.cli --root "$tmp" check
 ```
